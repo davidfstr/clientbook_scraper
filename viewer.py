@@ -187,18 +187,25 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             
             let html = `<h2>${escapeHtml(data.client_name)}</h2>`;
             
-            for (const [date, messages] of Object.entries(byDate)) {
-                html += `<div class="message-date">${escapeHtml(date)}</div>`;
-                messages.forEach(m => {
-                    html += `
-                        <div class="message">
-                            <div class="message-text">${escapeHtml(m.message_text)}</div>
-                        </div>
-                    `;
-                });
-            }
+            // Preserve message order and show dates before their messages
+            let lastDate = '';
+            data.messages.forEach(m => {
+                const date = m.message_date || 'Unknown Date';
+                if (date !== lastDate) {
+                    html += `<div class="message-date">${escapeHtml(date)}</div>`;
+                    lastDate = date;
+                }
+                html += `
+                    <div class="message">
+                        <div class="message-text">${escapeHtml(m.message_text)}</div>
+                    </div>
+                `;
+            });
             
             container.innerHTML = html;
+            
+            // Scroll to bottom to show most recent messages
+            container.scrollTop = container.scrollHeight;
         }
         
         function escapeHtml(text) {
@@ -266,10 +273,10 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         messages = []
         if conversation:
             rows = c.execute("""
-                SELECT message_text, message_date, message_time
+                SELECT message_text, message_date, message_time, message_id
                 FROM messages
                 WHERE conversation_id = ?
-                ORDER BY timestamp
+                ORDER BY message_id DESC
             """, (conversation['conversation_id'],)).fetchall()
             messages = [dict(row) for row in rows]
         

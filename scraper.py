@@ -213,27 +213,38 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
             if (messageContainer) {
                 // Parse messages from the container
                 const children = Array.from(messageContainer.children);
-                let currentDate = '';
                 
-                for (const child of children) {
+                // Build a map of what comes after each date
+                for (let i = 0; i < children.length; i++) {
+                    const child = children[i];
                     const text = child.textContent.trim();
                     
                     // Check if this is a date header
                     if (text.match(/^\\w+ \\d{2}, \\d{4}$/)) {
-                        currentDate = text;
-                        continue;
-                    }
-                    
-                    // Check if this looks like a message (has list items or substantial text)
-                    const listItems = child.querySelectorAll('li');
-                    if (listItems.length > 0) {
-                        for (const li of listItems) {
-                            const messageText = li.textContent.trim();
-                            if (messageText.length > 5) {  // Ignore very short text
-                                result.messages.push({
-                                    date: currentDate,
-                                    text: messageText.slice(0, 500)  // Limit length
-                                });
+                        const dateHeader = text;
+                        
+                        // Collect all messages that follow this date (until next date or end)
+                        for (let j = i + 1; j < children.length; j++) {
+                            const nextChild = children[j];
+                            const nextText = nextChild.textContent.trim();
+                            
+                            // Stop if we hit another date header
+                            if (nextText.match(/^\\w+ \\d{2}, \\d{4}$/)) {
+                                break;
+                            }
+                            
+                            // Extract messages from this element
+                            const listItems = nextChild.querySelectorAll('li');
+                            if (listItems.length > 0) {
+                                for (const li of listItems) {
+                                    const messageText = li.textContent.trim();
+                                    if (messageText.length > 5) {  // Ignore very short text
+                                        result.messages.push({
+                                            date: dateHeader,
+                                            text: messageText.slice(0, 500)  // Limit length
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
