@@ -214,37 +214,49 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                 // Parse messages from the container
                 const children = Array.from(messageContainer.children);
                 
-                // Build a map of what comes after each date
+                // In Clientbook DOM, messages appear newest-first (top to bottom)
+                // A date header applies to messages that come BEFORE it in the DOM
+                // So we need to scan forward to find dates, then look back to assign them
+                
+                // First pass: identify date positions
+                const datePositions = [];
+                for (let i = 0; i < children.length; i++) {
+                    const text = children[i].textContent.trim();
+                    if (text.match(/^\\w+ \\d{2}, \\d{4}$/)) {
+                        datePositions.push({ index: i, date: text });
+                    }
+                }
+                
+                // Second pass: extract messages and assign dates
                 for (let i = 0; i < children.length; i++) {
                     const child = children[i];
                     const text = child.textContent.trim();
                     
-                    // Check if this is a date header
+                    // Skip date headers themselves
                     if (text.match(/^\\w+ \\d{2}, \\d{4}$/)) {
-                        const dateHeader = text;
-                        
-                        // Collect all messages that follow this date (until next date or end)
-                        for (let j = i + 1; j < children.length; j++) {
-                            const nextChild = children[j];
-                            const nextText = nextChild.textContent.trim();
-                            
-                            // Stop if we hit another date header
-                            if (nextText.match(/^\\w+ \\d{2}, \\d{4}$/)) {
-                                break;
-                            }
-                            
-                            // Extract messages from this element
-                            const listItems = nextChild.querySelectorAll('li');
-                            if (listItems.length > 0) {
-                                for (const li of listItems) {
-                                    const messageText = li.textContent.trim();
-                                    if (messageText.length > 5) {  // Ignore very short text
-                                        result.messages.push({
-                                            date: dateHeader,
-                                            text: messageText.slice(0, 500)  // Limit length
-                                        });
-                                    }
-                                }
+                        continue;
+                    }
+                    
+                    // Find which date this message belongs to
+                    // It belongs to the first date that comes AFTER it in the DOM
+                    let messageDate = '';
+                    for (const datePos of datePositions) {
+                        if (datePos.index > i) {
+                            messageDate = datePos.date;
+                            break;
+                        }
+                    }
+                    
+                    // Extract messages from this element
+                    const listItems = child.querySelectorAll('li');
+                    if (listItems.length > 0) {
+                        for (const li of listItems) {
+                            const messageText = li.textContent.trim();
+                            if (messageText.length > 5) {  // Ignore very short text
+                                result.messages.push({
+                                    date: messageDate,
+                                    text: messageText.slice(0, 500)  // Limit length
+                                });
                             }
                         }
                     }
