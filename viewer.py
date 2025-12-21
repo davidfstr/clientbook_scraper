@@ -67,6 +67,22 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             font-size: 24px;
             font-weight: 600;
         }
+        .search-box {
+            padding: 15px 20px;
+            border-bottom: 1px solid #ddd;
+            background: #fafafa;
+        }
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .search-input::placeholder {
+            color: #999;
+        }
         .client-item {
             padding: 15px 20px;
             border-bottom: 1px solid #f0f0f0;
@@ -111,15 +127,26 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             color: #666;
             margin-bottom: 5px;
             font-weight: 600;
+            text-align: left;
         }
         .message-date {
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #2c5aa0;
+            text-align: center;
+            font-weight: 500;
+            font-size: 13px;
+            margin: 25px 0 15px;
+            color: #999;
         }
         .message-text {
             line-height: 1.5;
             white-space: pre-wrap;
+            text-align: left;
+        }
+        .message-time {
+            font-size: 10px;
+            color: #999;
+            text-align: right;
+            margin-top: 8px;
+            font-style: italic;
         }
         .message-image {
             margin-top: 10px;
@@ -143,6 +170,9 @@ class ClientbookHandler(BaseHTTPRequestHandler):
     <div class="container">
         <div class="sidebar">
             <div class="header">Clientbook Archive</div>
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="Search by name, phone, email..." disabled>
+            </div>
             <div id="clients-list" class="loading">Loading...</div>
         </div>
         <div class="main">
@@ -246,6 +276,11 @@ class ClientbookHandler(BaseHTTPRequestHandler):
                 // Show image if present
                 if (m.image_url) {
                     html += `<img src="${escapeHtml(m.image_url)}" class="message-image" alt="Message attachment">`;
+                }
+                
+                // Show message time
+                if (m.message_time) {
+                    html += `<div class="message-time">${escapeHtml(m.message_time)}</div>`;
                 }
                 
                 html += `</div>`;

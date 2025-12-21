@@ -271,7 +271,7 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                         const listItems = leftAlignedContainer.querySelectorAll('li');
                         if (listItems.length > 0) {
                             for (const li of listItems) {
-                                const messageText = li.textContent.trim();
+                                const messageText = li.innerText.trim();
                                 if (messageText.length > 5) {
                                     // Get timestamp
                                     let time = '';
@@ -305,7 +305,7 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                             const listItems = child.querySelectorAll('li');
                             if (listItems.length > 0) {
                                 for (const li of listItems) {
-                                    const messageText = li.textContent.trim();
+                                    const messageText = li.innerText.trim();
                                     if (messageText.length > 5) {
                                         // Get timestamp
                                         let time = '';
