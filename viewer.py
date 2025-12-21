@@ -102,6 +102,12 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             line-height: 1.5;
             white-space: pre-wrap;
         }
+        .message-image {
+            margin-top: 10px;
+            max-width: 300px;
+            border-radius: 8px;
+            display: block;
+        }
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -195,11 +201,19 @@ class ClientbookHandler(BaseHTTPRequestHandler):
                     html += `<div class="message-date">${escapeHtml(date)}</div>`;
                     lastDate = date;
                 }
-                html += `
-                    <div class="message">
-                        <div class="message-text">${escapeHtml(m.message_text)}</div>
-                    </div>
-                `;
+                html += `<div class="message">`;
+                
+                // Show message text (skip if it's just the placeholder "[Image]")
+                if (m.message_text && m.message_text !== '[Image]') {
+                    html += `<div class="message-text">${escapeHtml(m.message_text)}</div>`;
+                }
+                
+                // Show image if present
+                if (m.image_url) {
+                    html += `<img src="${escapeHtml(m.image_url)}" class="message-image" alt="Message attachment">`;
+                }
+                
+                html += `</div>`;
             });
             
             container.innerHTML = html;
@@ -273,10 +287,12 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         messages = []
         if conversation:
             rows = c.execute("""
-                SELECT message_text, message_date, message_time, message_id
-                FROM messages
-                WHERE conversation_id = ?
-                ORDER BY message_id DESC
+                SELECT m.message_text, m.message_date, m.message_time, m.message_id,
+                       i.image_url, i.image_id
+                FROM messages m
+                LEFT JOIN images i ON m.message_id = i.message_id
+                WHERE m.conversation_id = ?
+                ORDER BY m.message_id DESC
             """, (conversation['conversation_id'],)).fetchall()
             messages = [dict(row) for row in rows]
         

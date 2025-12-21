@@ -54,6 +54,17 @@ def init_database():
         )
     """)
     
+    # Images table (images attached to messages)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS images (
+            image_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id INTEGER NOT NULL,
+            image_url TEXT NOT NULL,
+            image_time TEXT,  -- timestamp when image was sent
+            FOREIGN KEY (message_id) REFERENCES messages(message_id)
+        )
+    """)
+    
     conn.commit()
     conn.close()
     print(f"✓ Database initialized at {DB_PATH}")
@@ -253,12 +264,33 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                         for (const li of listItems) {
                             const messageText = li.textContent.trim();
                             if (messageText.length > 5) {  // Ignore very short text
+                                // Get timestamp if available
+                                const timeEl = child.querySelector('.chatDate, .singleMessageWrapper span');
+                                const time = timeEl ? timeEl.textContent.trim() : '';
+                                
                                 result.messages.push({
                                     date: messageDate,
-                                    text: messageText.slice(0, 500)  // Limit length
+                                    text: messageText.slice(0, 500),  // Limit length
+                                    time: time,
+                                    type: 'text'
                                 });
                             }
                         }
+                    }
+                    
+                    // Check if this is an image container
+                    const imgElement = child.querySelector('img.photoFit, img[src*="amazonaws.com"][src*=".jpg"]');
+                    if (imgElement && imgElement.src) {
+                        // Get the timestamp for the image
+                        const timeEl = child.querySelector('.singleMessageWrapper span');
+                        const time = timeEl ? timeEl.textContent.trim() : '';
+                        
+                        result.messages.push({
+                            date: messageDate,
+                            imageUrl: imgElement.src,
+                            time: time,
+                            type: 'image'
+                        });
                     }
                 }
                 
@@ -350,20 +382,54 @@ async def main():
                 
                 # Save messages
                 for msg in data.get('messages', []):
-                    c.execute("""
-                        INSERT INTO messages (
-                            conversation_id, sender_type, sender_name, 
-                            message_text, message_date, message_time, timestamp
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        conversation_id,
-                        'unknown',  # We'll need to detect this better
-                        '',
-                        msg.get('text', ''),
-                        msg.get('date', ''),
-                        '',
-                        datetime.now().isoformat()
-                    ))
+                    msg_type = msg.get('type', 'text')
+                    
+                    if msg_type == 'text':
+                        # Insert text message
+                        c.execute("""
+                            INSERT INTO messages (
+                                conversation_id, sender_type, sender_name, 
+                                message_text, message_date, message_time, timestamp
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            conversation_id,
+                            'unknown',  # We'll need to detect this better
+                            '',
+                            msg.get('text', ''),
+                            msg.get('date', ''),
+                            msg.get('time', ''),
+                            datetime.now().isoformat()
+                        ))
+                    
+                    elif msg_type == 'image':
+                        # Create a placeholder message for the image
+                        c.execute("""
+                            INSERT INTO messages (
+                                conversation_id, sender_type, sender_name, 
+                                message_text, message_date, message_time, timestamp
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            conversation_id,
+                            'unknown',
+                            '',
+                            '[Image]',  # Placeholder text
+                            msg.get('date', ''),
+                            msg.get('time', ''),
+                            datetime.now().isoformat()
+                        ))
+                        
+                        # Get the message_id we just inserted
+                        message_id = c.lastrowid
+                        
+                        # Insert the image record
+                        c.execute("""
+                            INSERT INTO images (message_id, image_url, image_time)
+                            VALUES (?, ?, ?)
+                        """, (
+                            message_id,
+                            msg.get('imageUrl', ''),
+                            msg.get('time', '')
+                        ))
                 
                 conn.commit()
                 print(f"  ✓ Saved to database")

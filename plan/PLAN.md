@@ -83,10 +83,27 @@ Save notes you want to remember between sessions to this section:
 - Compare against original Clientbook UI by opening same conversation in both
 - Restart viewer after database changes
 
+**Image Capture Implementation (Session 2: 2025-12-21):**
+
+Images in Clientbook are:
+- Stored as separate DOM elements from text messages
+- Have class `photoFit` and are wrapped in `div.border-r4.pos-rel.pointer.m-right-9`
+- Source URLs are S3 links: `https://s3.amazonaws.com/ec2-static.giftry.com/[uuid].jpg`
+- Appear in DOM immediately after their associated text message
+- Share the same timestamp as the preceding text message
+
+Implementation:
+- Added `images` table to database with `message_id`, `image_url`, `image_time`
+- Updated scraper's JS to detect both text messages AND image containers
+- Messages with images create a placeholder message with text `[Image]`
+- Viewer's SQL query joins messages with images table
+- Viewer displays images inline using `<img>` tags with class `message-image`
+
+✅ **Status:** Image capture and display working! Verified with Andrew Powers conversation.
+
 **Next Steps:**
 - Get a conversation to scrape/view perfectly (in terms of information content):
     - Improve message parsing to detect sender (client vs associate) 
-    - Capture images attached to messages, in addition to the text content
     - Scroll through long conversations in scraper to get all messages (may be paginated)
 - Scrape all conversations (not just first 5). The conversation view is paginated, so will need to scroll it to reveal new conversations.
 - Add search (by client name) functionality to viewer
