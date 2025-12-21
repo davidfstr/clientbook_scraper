@@ -198,7 +198,8 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                     result.clientId = match[1];
                 }
                 
-                const nameDiv = headerLink.querySelector('div div:first-child');
+                // Get the name from the second div (first has initials, second has name)
+                const nameDiv = headerLink.querySelector('div div:nth-child(2)');
                 if (nameDiv) {
                     result.clientName = nameDiv.textContent.trim();
                 }
@@ -249,7 +250,6 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                     }
                     
                     // Find which date this message belongs to
-                    // It belongs to the first date that comes AFTER it in the DOM
                     let messageDate = '';
                     for (const datePos of datePositions) {
                         if (datePos.index > i) {
@@ -258,22 +258,75 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                         }
                     }
                     
-                    // Extract messages from this element
-                    const listItems = child.querySelectorAll('li');
-                    if (listItems.length > 0) {
-                        for (const li of listItems) {
-                            const messageText = li.textContent.trim();
-                            if (messageText.length > 5) {  // Ignore very short text
-                                // Get timestamp if available
-                                const timeEl = child.querySelector('.chatDate, .singleMessageWrapper span');
-                                const time = timeEl ? timeEl.textContent.trim() : '';
-                                
-                                result.messages.push({
-                                    date: messageDate,
-                                    text: messageText.slice(0, 500),  // Limit length
-                                    time: time,
-                                    type: 'text'
-                                });
+                    // Check if this is a left-aligned message with sender info (client or other associate)
+                    // These have a first child with class flex-row-nospacebetween-nowrap m-top-12
+                    const leftAlignedContainer = child.querySelector('.flex-row-nospacebetween-nowrap.m-top-12');
+                    
+                    if (leftAlignedContainer) {
+                        // This is a client or other associate message
+                        const senderEl = leftAlignedContainer.querySelector('span.text-light-gray.fs-10.m-left-8');
+                        const senderName = senderEl ? senderEl.textContent.trim() : '';
+                        
+                        const listItems = leftAlignedContainer.querySelectorAll('li');
+                        if (listItems.length > 0) {
+                            for (const li of listItems) {
+                                const messageText = li.textContent.trim();
+                                if (messageText.length > 5) {
+                                    // Get timestamp
+                                    let time = '';
+                                    const timeEl = leftAlignedContainer.querySelector('span.fs-10.italic');
+                                    if (timeEl) {
+                                        const timeText = timeEl.textContent.trim();
+                                        const timeMatch = timeText.match(/\\d{1,2}:\\d{2}\\s*[ap]m/i);
+                                        if (timeMatch) {
+                                            time = timeMatch[0];
+                                        }
+                                    }
+                                    
+                                    result.messages.push({
+                                        date: messageDate,
+                                        text: messageText.slice(0, 500),
+                                        time: time,
+                                        type: 'text',
+                                        isRightAligned: false,
+                                        senderName: senderName
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        // Check if this is a right-aligned message (from associate/account holder)
+                        const isRightAligned = child.classList.contains('align-right') || 
+                                              child.querySelector('.singleMessageWrapper.align-right') !== null;
+                        
+                        if (isRightAligned) {
+                            // Extract messages from right-aligned container
+                            const listItems = child.querySelectorAll('li');
+                            if (listItems.length > 0) {
+                                for (const li of listItems) {
+                                    const messageText = li.textContent.trim();
+                                    if (messageText.length > 5) {
+                                        // Get timestamp
+                                        let time = '';
+                                        const timeEl = child.querySelector('span.fs-10.italic, .chatDate');
+                                        if (timeEl) {
+                                            const timeText = timeEl.textContent.trim();
+                                            const timeMatch = timeText.match(/\\d{1,2}:\\d{2}\\s*[ap]m/i);
+                                            if (timeMatch) {
+                                                time = timeMatch[0];
+                                            }
+                                        }
+                                        
+                                        result.messages.push({
+                                            date: messageDate,
+                                            text: messageText.slice(0, 500),
+                                            time: time,
+                                            type: 'text',
+                                            isRightAligned: true,
+                                            senderName: ''
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -282,14 +335,23 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                     const imgElement = child.querySelector('img.photoFit, img[src*="amazonaws.com"][src*=".jpg"]');
                     if (imgElement && imgElement.src) {
                         // Get the timestamp for the image
-                        const timeEl = child.querySelector('.singleMessageWrapper span');
-                        const time = timeEl ? timeEl.textContent.trim() : '';
+                        let time = '';
+                        const timeEl = child.querySelector('.singleMessageWrapper span, span.fs-10.italic');
+                        if (timeEl) {
+                            const timeText = timeEl.textContent.trim();
+                            const timeMatch = timeText.match(/\d{1,2}:\d{2}\s*[ap]m/i);
+                            if (timeMatch) {
+                                time = timeMatch[0];
+                            }
+                        }
                         
                         result.messages.push({
                             date: messageDate,
                             imageUrl: imgElement.src,
                             time: time,
-                            type: 'image'
+                            type: 'image',
+                            isRightAligned: true,
+                            senderName: ''
                         });
                     }
                 }
@@ -348,7 +410,9 @@ async def main():
             print(f"Press Ctrl+C to cancel at any time.")
             
             # For now, let's scrape first 5 as default
-            num_to_scrape = min(5, len(conversations))
+            # NOTE: Temporarily increased 5->8 so that continue to scrape
+            #       the Andrew Powers conversation, which is of special interest
+            num_to_scrape = min(8, len(conversations))
             print(f"\nScraping first {num_to_scrape} conversations...")
             
             # Save to database
@@ -383,6 +447,20 @@ async def main():
                 # Save messages
                 for msg in data.get('messages', []):
                     msg_type = msg.get('type', 'text')
+                    is_right = msg.get('isRightAligned', False)
+                    sender_name = msg.get('senderName', '')
+                    
+                    # Determine sender type
+                    if is_right:
+                        sender_type = 'associate'  # Account holder (Laura)
+                    elif sender_name:
+                        # Check if it's the client or another associate
+                        if sender_name == data.get('clientName', ''):
+                            sender_type = 'client'
+                        else:
+                            sender_type = 'other_associate'
+                    else:
+                        sender_type = 'unknown'
                     
                     if msg_type == 'text':
                         # Insert text message
@@ -393,8 +471,8 @@ async def main():
                             ) VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (
                             conversation_id,
-                            'unknown',  # We'll need to detect this better
-                            '',
+                            sender_type,
+                            sender_name,
                             msg.get('text', ''),
                             msg.get('date', ''),
                             msg.get('time', ''),
@@ -410,8 +488,8 @@ async def main():
                             ) VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (
                             conversation_id,
-                            'unknown',
-                            '',
+                            sender_type,
+                            sender_name,
                             '[Image]',  # Placeholder text
                             msg.get('date', ''),
                             msg.get('time', ''),

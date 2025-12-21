@@ -93,6 +93,25 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             background: #f9f9f9;
             border-radius: 8px;
         }
+        .message.from-associate {
+            background: #e8f0ff;
+            margin-left: auto;
+            max-width: 70%;
+        }
+        .message.from-client {
+            background: #f0f0f0;
+            max-width: 70%;
+        }
+        .message.from-other {
+            background: #fff8e1;
+            max-width: 70%;
+        }
+        .sender-name {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
         .message-date {
             font-weight: 600;
             margin-bottom: 10px;
@@ -201,7 +220,23 @@ class ClientbookHandler(BaseHTTPRequestHandler):
                     html += `<div class="message-date">${escapeHtml(date)}</div>`;
                     lastDate = date;
                 }
-                html += `<div class="message">`;
+                
+                // Determine message class based on sender
+                let messageClass = 'message';
+                if (m.sender_type === 'associate') {
+                    messageClass += ' from-associate';
+                } else if (m.sender_type === 'client') {
+                    messageClass += ' from-client';
+                } else if (m.sender_type === 'other_associate') {
+                    messageClass += ' from-other';
+                }
+                
+                html += `<div class="${messageClass}">`;
+                
+                // Show sender name for non-associate messages
+                if (m.sender_name) {
+                    html += `<div class="sender-name">${escapeHtml(m.sender_name)}</div>`;
+                }
                 
                 // Show message text (skip if it's just the placeholder "[Image]")
                 if (m.message_text && m.message_text !== '[Image]') {
@@ -288,6 +323,7 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         if conversation:
             rows = c.execute("""
                 SELECT m.message_text, m.message_date, m.message_time, m.message_id,
+                       m.sender_type, m.sender_name,
                        i.image_url, i.image_id
                 FROM messages m
                 LEFT JOIN images i ON m.message_id = i.message_id

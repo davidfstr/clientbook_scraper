@@ -83,7 +83,7 @@ Save notes you want to remember between sessions to this section:
 - Compare against original Clientbook UI by opening same conversation in both
 - Restart viewer after database changes
 
-**Image Capture Implementation (Session 2: 2025-12-21):**
+**Image Capture Implementation (Session 2.1: 2025-12-21):**
 
 Images in Clientbook are:
 - Stored as separate DOM elements from text messages
@@ -99,11 +99,39 @@ Implementation:
 - Viewer's SQL query joins messages with images table
 - Viewer displays images inline using `<img>` tags with class `message-image`
 
-✅ **Status:** Image capture and display working! Verified with Andrew Powers conversation.
+**Sender Detection Implementation (Session 2.2: 2025-12-21):**
+
+Messages in Clientbook have different alignments and structures based on sender:
+
+**Right-aligned messages** (from account holder associate):
+- Class: `singleMessageWrapper align-right`
+- No sender name displayed
+- Blue tail indicator
+- Stored as `sender_type='associate'` with empty `sender_name`
+
+**Left-aligned messages** (from client or other associates):
+- Wrapped in `<div>` with no class, containing child with `flex-row-nospacebetween-nowrap m-top-12`
+- Display sender name in `span.text-light-gray.fs-10.m-left-8`
+- Gray bubble, left-aligned
+- Stored as `sender_type='client'` or `sender_type='other_associate'` with `sender_name` populated
+
+Implementation:
+- Updated scraper to detect both right-aligned and left-aligned message containers
+- Right-aligned: Check for `.singleMessageWrapper.align-right`
+- Left-aligned: Check for child element `.flex-row-nospacebetween-nowrap.m-top-12`
+- Extract sender name from left-aligned messages
+- Classify sender as client (matches conversation client name) vs other associate
+- Fixed client name extraction to use `div:nth-child(2)` to skip initials div
+- Updated viewer CSS with different background colors per sender type:
+  - `.from-associate` (blue background) - account holder messages
+  - `.from-client` (gray background) - client messages  
+  - `.from-other` (yellow background) - other associate messages
+- Display sender name above message text for non-associate messages
+
+✅ **Status:** Sender detection working! Messages correctly classified and styled by sender type.
 
 **Next Steps:**
 - Get a conversation to scrape/view perfectly (in terms of information content):
-    - Improve message parsing to detect sender (client vs associate) 
     - Scroll through long conversations in scraper to get all messages (may be paginated)
 - Scrape all conversations (not just first 5). The conversation view is paginated, so will need to scroll it to reveal new conversations.
 - Add search (by client name) functionality to viewer
