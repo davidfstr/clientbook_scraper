@@ -286,7 +286,7 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                                     
                                     result.messages.push({
                                         date: messageDate,
-                                        text: messageText.slice(0, 500),
+                                        text: messageText,
                                         time: time,
                                         type: 'text',
                                         isRightAligned: false,
@@ -320,7 +320,7 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                                         
                                         result.messages.push({
                                             date: messageDate,
-                                            text: messageText.slice(0, 500),
+                                            text: messageText,
                                             time: time,
                                             type: 'text',
                                             isRightAligned: true,
