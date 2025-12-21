@@ -130,9 +130,45 @@ Implementation:
 
 ✅ **Status:** Sender detection working! Messages correctly classified and styled by sender type.
 
+**Session 3: Pagination & Bulk Scraping (2025-12-21):**
+
+**Investigation with Playwright MCP:**
+- Confirmed conversation list is paginated/virtualized
+- Initial load shows ~25 conversations
+- Scrolling triggers loading of more conversations
+- After 2 scrolls: 81 conversations visible
+- Scrollable container has `overflow-y: auto` and contains `li[id*="chatList"]` elements
+- Scroll by setting `scrollTop = scrollHeight`, then wait 2s for new items to load
+
+**Scraper Enhancements:**
+- Added CLI argument parsing with `argparse`
+- `--minimal-messages`: Fetches only 1 message per conversation for faster name extraction
+- `--num-conversations N`: Target number of conversations to load (default: 50)
+- Automatic scrolling in `get_inbox_list()`:
+  - Finds scrollable container with `overflow-y: auto`
+  - Scrolls to bottom repeatedly until target count reached or no more conversations load
+  - Max 20 scroll attempts to prevent infinite loops
+  - 2-second wait between scrolls for pagination to load
+- Reduced wait time (1s vs 3s) when using `--minimal-messages`
+- JavaScript evaluation updated to accept `minimalMode` parameter
+- Message extraction stops after 1 message in minimal mode
+- Images skipped in minimal mode
+
+**Usage Examples:**
+```bash
+# Scrape 50 conversations with full messages (default)
+python scraper.py
+
+# Quickly scrape 100 conversation names (1 message each)
+python scraper.py --minimal-messages --num-conversations 100
+
+# Scrape 25 conversations with all messages
+python scraper.py --num-conversations 25
+```
+
 **Next Steps:**
 - Get a conversation to scrape/view perfectly (in terms of information content):
     - Scroll through long conversations in scraper to get all messages (may be paginated)
-- Scrape all conversations (not just first 5). The conversation view is paginated, so will need to scroll it to reveal new conversations.
+    - Download images. Don't just record image URLs.
 - Add search (by client name) functionality to viewer
 - Style viewer to look more like Clientbook UI (message bubbles, colors, layout)

@@ -5,6 +5,7 @@ Clientbook scraper - extracts conversation data from Clientbook dashboard
 
 import asyncio
 import sqlite3
+import argparse
 from pathlib import Path
 from playwright.async_api import async_playwright, Page
 from datetime import datetime
@@ -114,8 +115,8 @@ async def login_to_clientbook(page: Page):
         print("✓ Already logged in")
 
 
-async def get_inbox_list(page: Page) -> list:
-    """Navigate to inbox and get list of conversations"""
+async def get_inbox_list(page: Page, target_count: int = 50) -> list:
+    """Navigate to inbox and get list of conversations, scrolling to load more"""
     print("\nNavigating to inbox...")
     
     # Click on the Inbox menu item
@@ -131,7 +132,7 @@ async def get_inbox_list(page: Page) -> list:
     await page.wait_for_load_state('domcontentloaded')
     await asyncio.sleep(3)  # Wait for dynamic content
     
-    print("Extracting conversation list...")
+    print(f"Loading conversations (target: {target_count})...")
     
     # Wait for the conversation list to appear
     try:
@@ -141,6 +142,72 @@ async def get_inbox_list(page: Page) -> list:
         # Take a screenshot for debugging
         await page.screenshot(path='debug_inbox.png')
         print("📷 Saved screenshot to debug_inbox.png")
+    
+    # Scroll the conversation list to load more conversations
+    prev_count = 0
+    attempts = 0
+    max_attempts = 20  # Prevent infinite loops
+    
+    while attempts < max_attempts:
+        # Count current conversations
+        current_count = await page.evaluate("""
+            () => {
+                return document.querySelectorAll('li[id*="chatList"]').length;
+            }
+        """)
+        
+        print(f"  Currently loaded: {current_count} conversations")
+        
+        # Check if we have enough or if no new conversations loaded
+        if current_count >= target_count or (current_count == prev_count and attempts > 0):
+            break
+        
+        prev_count = current_count
+        
+        # Scroll to load more
+        scrolled = await page.evaluate("""
+            () => {
+                // Find the scrollable container with overflow-y: auto
+                const allDivs = document.querySelectorAll('div');
+                let scrollContainer = null;
+                
+                for (const div of allDivs) {
+                    const style = window.getComputedStyle(div);
+                    if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                        const listItems = div.querySelectorAll('li[id*="chatList"]');
+                        if (listItems.length > 0) {
+                            scrollContainer = div;
+                            break;
+                        }
+                    }
+                }
+                
+                if (scrollContainer) {
+                    const before = scrollContainer.scrollTop;
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                    const after = scrollContainer.scrollTop;
+                    return { success: true, scrolled: after > before };
+                }
+                
+                return { success: false };
+            }
+        """)
+        
+        if not scrolled.get('success'):
+            print("⚠️  Could not find scrollable container")
+            break
+        
+        if not scrolled.get('scrolled'):
+            print("  Reached bottom of list")
+            break
+        
+        # Wait for new conversations to load
+        await asyncio.sleep(2)
+        attempts += 1
+    
+    print(f"✓ Loaded {current_count} conversations total")
+    
+    print("\nExtracting conversation details...")
     
     conversations = await page.evaluate("""
         () => {
@@ -172,17 +239,21 @@ async def get_inbox_list(page: Page) -> list:
     return conversations
 
 
-async def scrape_conversation(page: Page, conversation_index: int) -> dict:
+async def scrape_conversation(page: Page, conversation_index: int, minimal_messages: bool = False) -> dict:
     """Click on a conversation and extract all messages"""
     print(f"\nScraping conversation {conversation_index + 1}...")
     
     # Click on the conversation
     await page.locator(f'li[id^="chatList"]').nth(conversation_index).click()
-    await asyncio.sleep(3)  # Wait for messages to load
     
-    # Extract conversation data
-    data = await page.evaluate("""
-        () => {
+    # Wait less time if we're doing minimal scraping
+    wait_time = 1 if minimal_messages else 3
+    await asyncio.sleep(wait_time)  # Wait for messages to load
+    
+    # Prepare JavaScript code with minimal mode flag
+    js_code = """
+        (minimalMode) => {
+            const MINIMAL_MODE = minimalMode;
             const result = {
                 clientName: '',
                 clientId: '',
@@ -241,7 +312,12 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                 }
                 
                 // Second pass: extract messages and assign dates
+                const maxMessages = MINIMAL_MODE ? 1 : 999999;
+                let messageCount = 0;
+                
                 for (let i = 0; i < children.length; i++) {
+                    if (messageCount >= maxMessages) break;
+                    
                     const child = children[i];
                     const text = child.textContent.trim();
                     
@@ -292,6 +368,7 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                                         isRightAligned: false,
                                         senderName: senderName
                                     });
+                                    messageCount++;
                                 }
                             }
                         }
@@ -326,48 +403,52 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                                             isRightAligned: true,
                                             senderName: ''
                                         });
+                                        messageCount++;
                                     }
                                 }
                             }
                         }
                     }
                     
-                    // Check if this is an image container
-                    const imgElement = child.querySelector('img.photoFit, img[src*="amazonaws.com"][src*=".jpg"]');
-                    if (imgElement && imgElement.src) {
-                        // Determine if this image is from the client/other associate (left-aligned) or associate (right-aligned)
-                        // Check for left-aligned container first
-                        const leftAlignedImageContainer = child.querySelector('.flex-row-nospacebetween-nowrap.m-top-12');
-                        const isRightAligned = !leftAlignedImageContainer && 
-                                               (child.classList.contains('align-right') || 
-                                                child.querySelector('.singleMessageWrapper.align-right') !== null);
-                        
-                        // Get sender name if left-aligned
-                        let senderName = '';
-                        if (leftAlignedImageContainer) {
-                            const senderEl = leftAlignedImageContainer.querySelector('span.text-light-gray.fs-10.m-left-8');
-                            senderName = senderEl ? senderEl.textContent.trim() : '';
-                        }
-                        
-                        // Get the timestamp for the image
-                        let time = '';
-                        const timeEl = child.querySelector('.singleMessageWrapper span, span.fs-10.italic');
-                        if (timeEl) {
-                            const timeText = timeEl.textContent.trim();
-                            const timeMatch = timeText.match(/\d{1,2}:\d{2}\s*[ap]m/i);
-                            if (timeMatch) {
-                                time = timeMatch[0];
+                    // Check if this is an image container (skip in minimal mode)
+                    if (!MINIMAL_MODE) {
+                        const imgElement = child.querySelector('img.photoFit, img[src*="amazonaws.com"][src*=".jpg"]');
+                        if (imgElement && imgElement.src) {
+                            // Determine if this image is from the client/other associate (left-aligned) or associate (right-aligned)
+                            // Check for left-aligned container first
+                            const leftAlignedImageContainer = child.querySelector('.flex-row-nospacebetween-nowrap.m-top-12');
+                            const isRightAligned = !leftAlignedImageContainer && 
+                                                   (child.classList.contains('align-right') || 
+                                                    child.querySelector('.singleMessageWrapper.align-right') !== null);
+                            
+                            // Get sender name if left-aligned
+                            let senderName = '';
+                            if (leftAlignedImageContainer) {
+                                const senderEl = leftAlignedImageContainer.querySelector('span.text-light-gray.fs-10.m-left-8');
+                                senderName = senderEl ? senderEl.textContent.trim() : '';
                             }
+                            
+                            // Get the timestamp for the image
+                            let time = '';
+                            const timeEl = child.querySelector('.singleMessageWrapper span, span.fs-10.italic');
+                            if (timeEl) {
+                                const timeText = timeEl.textContent.trim();
+                                const timeMatch = timeText.match(/\d{1,2}:\d{2}\s*[ap]m/i);
+                                if (timeMatch) {
+                                    time = timeMatch[0];
+                                }
+                            }
+                            
+                            result.messages.push({
+                                date: messageDate,
+                                imageUrl: imgElement.src,
+                                time: time,
+                                type: 'image',
+                                isRightAligned: isRightAligned,
+                                senderName: senderName
+                            });
+                            messageCount++;
                         }
-                        
-                        result.messages.push({
-                            date: messageDate,
-                            imageUrl: imgElement.src,
-                            time: time,
-                            type: 'image',
-                            isRightAligned: isRightAligned,
-                            senderName: senderName
-                        });
                     }
                 }
                 
@@ -384,19 +465,36 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
             
             return result;
         }
-    """)
+    """
+    
+    # Execute the JavaScript with the minimal mode parameter
+    data = await page.evaluate(js_code, minimal_messages)
     
     print(f"  Client: {data.get('clientName', 'Unknown')} (ID: {data.get('clientId', 'Unknown')})")
     print(f"  Messages found: {len(data.get('messages', []))}")
     if data.get('messages'):
-        print(f"  First message: {data['messages'][0].get('text', '')[:80]}...")
+        first_msg_text = data['messages'][0].get('text', data['messages'][0].get('imageUrl', ''))
+        print(f"  First message: {str(first_msg_text)[:80]}...")
+    return data
     return data
 
 
 async def main():
     """Main scraper entry point"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Scrape conversation data from Clientbook')
+    parser.add_argument('--minimal-messages', action='store_true',
+                       help='Fetch only 1 message per conversation for faster name extraction')
+    parser.add_argument('--num-conversations', type=int, default=50,
+                       help='Number of conversations to scrape (default: 50)')
+    args = parser.parse_args()
+    
     print("=" * 60)
     print("CLIENTBOOK SCRAPER")
+    print("=" * 60)
+    if args.minimal_messages:
+        print("⚡ MINIMAL MODE: Fetching only 1 message per conversation")
+    print(f"Target: {args.num_conversations} conversations")
     print("=" * 60)
     
     # Initialize database
@@ -412,30 +510,23 @@ async def main():
             # Login
             await login_to_clientbook(page)
             
-            # Get inbox list
-            conversations = await get_inbox_list(page)
+            # Get inbox list (scroll to load target number of conversations)
+            conversations = await get_inbox_list(page, target_count=args.num_conversations)
             
             if not conversations:
                 print("\n⚠️  No conversations found!")
                 return
             
-            # Ask user how many to scrape
-            print(f"\nFound {len(conversations)} conversations total.")
-            print(f"How many would you like to scrape? (Enter a number, or 'all' for all)")
-            print(f"Press Ctrl+C to cancel at any time.")
-            
-            # For now, let's scrape first 5 as default
-            # NOTE: Temporarily increased 5->8 so that continue to scrape
-            #       the Andrew Powers conversation, which is of special interest
-            num_to_scrape = min(8, len(conversations))
-            print(f"\nScraping first {num_to_scrape} conversations...")
+            # Determine how many to scrape
+            num_to_scrape = min(args.num_conversations, len(conversations))
+            print(f"\nScraping {num_to_scrape} conversations...")
             
             # Save to database
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             
             for i in range(num_to_scrape):
-                data = await scrape_conversation(page, i)
+                data = await scrape_conversation(page, i, minimal_messages=args.minimal_messages)
                 
                 # Save client
                 c.execute("""
