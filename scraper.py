@@ -335,6 +335,20 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                     // Check if this is an image container
                     const imgElement = child.querySelector('img.photoFit, img[src*="amazonaws.com"][src*=".jpg"]');
                     if (imgElement && imgElement.src) {
+                        // Determine if this image is from the client/other associate (left-aligned) or associate (right-aligned)
+                        // Check for left-aligned container first
+                        const leftAlignedImageContainer = child.querySelector('.flex-row-nospacebetween-nowrap.m-top-12');
+                        const isRightAligned = !leftAlignedImageContainer && 
+                                               (child.classList.contains('align-right') || 
+                                                child.querySelector('.singleMessageWrapper.align-right') !== null);
+                        
+                        // Get sender name if left-aligned
+                        let senderName = '';
+                        if (leftAlignedImageContainer) {
+                            const senderEl = leftAlignedImageContainer.querySelector('span.text-light-gray.fs-10.m-left-8');
+                            senderName = senderEl ? senderEl.textContent.trim() : '';
+                        }
+                        
                         // Get the timestamp for the image
                         let time = '';
                         const timeEl = child.querySelector('.singleMessageWrapper span, span.fs-10.italic');
@@ -351,8 +365,8 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                             imageUrl: imgElement.src,
                             time: time,
                             type: 'image',
-                            isRightAligned: true,
-                            senderName: ''
+                            isRightAligned: isRightAligned,
+                            senderName: senderName
                         });
                     }
                 }
