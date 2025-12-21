@@ -425,9 +425,9 @@ async def main():
             print(f"Press Ctrl+C to cancel at any time.")
             
             # For now, let's scrape first 5 as default
-            # NOTE: Temporarily increased 5->X so that continue to scrape
-            #       the Patrick Coyle conversation, which is of special interest
-            num_to_scrape = min(15, len(conversations))
+            # NOTE: Temporarily increased 5->8 so that continue to scrape
+            #       the Andrew Powers conversation, which is of special interest
+            num_to_scrape = min(8, len(conversations))
             print(f"\nScraping first {num_to_scrape} conversations...")
             
             # Save to database

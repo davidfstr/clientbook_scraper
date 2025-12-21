@@ -312,9 +312,12 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         c = conn.cursor()
         
         rows = c.execute("""
-            SELECT client_id, name 
-            FROM clients 
-            ORDER BY name
+            SELECT c.client_id, c.name 
+            FROM clients c
+            LEFT JOIN conversations cv ON c.client_id = cv.client_id
+            LEFT JOIN messages m ON cv.conversation_id = m.conversation_id
+            GROUP BY c.client_id
+            ORDER BY MIN(m.message_id) ASC
         """).fetchall()
         
         clients = [dict(row) for row in rows]
