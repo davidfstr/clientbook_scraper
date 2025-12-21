@@ -198,10 +198,11 @@ async def scrape_conversation(page: Page, conversation_index: int) -> dict:
                     result.clientId = match[1];
                 }
                 
-                // Get the name from the second div (first has initials, second has name)
-                const nameDiv = headerLink.querySelector('div div:nth-child(2)');
-                if (nameDiv) {
-                    result.clientName = nameDiv.textContent.trim();
+                // Get the name from the first span inside the flex-col-left-center div
+                // This div contains two spans: first has full name, second has extra info like "FirstName |"
+                const nameSpan = headerLink.querySelector('.flex-col-left-center span:first-child');
+                if (nameSpan) {
+                    result.clientName = nameSpan.textContent.trim();
                 }
             }
             
@@ -410,9 +411,9 @@ async def main():
             print(f"Press Ctrl+C to cancel at any time.")
             
             # For now, let's scrape first 5 as default
-            # NOTE: Temporarily increased 5->8 so that continue to scrape
-            #       the Andrew Powers conversation, which is of special interest
-            num_to_scrape = min(8, len(conversations))
+            # NOTE: Temporarily increased 5->X so that continue to scrape
+            #       the Patrick Coyle conversation, which is of special interest
+            num_to_scrape = min(15, len(conversations))
             print(f"\nScraping first {num_to_scrape} conversations...")
             
             # Save to database
