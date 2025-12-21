@@ -14,7 +14,8 @@ Unfortunately Clientbook's HTML and JS structure is too complex to download with
 
 - Use Python, both to build the scraper and serve the website for data browsing
 - For website serving use a very lightweight framework (like bottle.py) or no framewwork at all (like just http.server)
-- Create files related to this project inside the `plan/clientbook2` directory.
+- Use the "venv" virtual environment: `source ./venv/bin/activate`
+   - If you see an error like `SyntaxError: Non-ASCII character C in file X.py` then you probably forgot to activate the venv after opening a new terminal.
 - Use the Playwright MCP tools to interactively explore the Clientbook web interface and discover its structure
 - Write the scraper such that it also uses Playwright to extract data from the browser DOM. The API endpoints in Clientbook are complex and time-consuming to try to use directly.
 
