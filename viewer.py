@@ -177,7 +177,7 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         <div class="sidebar">
             <div class="header">Clientbook Archive</div>
             <div class="search-box">
-                <input type="text" class="search-input" placeholder="Search by name, phone, email..." disabled>
+                <input type="text" id="search-input" class="search-input" placeholder="Search by first or last name...">
             </div>
             <div id="clients-list" class="loading">Loading...</div>
         </div>
@@ -190,15 +190,54 @@ class ClientbookHandler(BaseHTTPRequestHandler):
     
     <script>
         let clients = [];
+        let allClients = [];
         let activeClientId = null;
+        let searchTimeout = null;
         
         // Load clients list
         fetch('/api/clients')
             .then(r => r.json())
             .then(data => {
+                allClients = data;
                 clients = data;
                 renderClientsList();
+                setupSearch();
             });
+        
+        function setupSearch() {
+            const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', function(e) {
+                const query = e.target.value;
+                
+                // Clear existing timeout
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                
+                // Only search if at least 2 characters or empty (to show all)
+                if (query.length >= 2) {
+                    // Wait 300ms after user stops typing
+                    searchTimeout = setTimeout(() => {
+                        filterClients(query);
+                    }, 300);
+                } else if (query.length === 0) {
+                    // Show all clients when search is cleared
+                    clients = allClients;
+                    renderClientsList();
+                }
+            });
+        }
+        
+        function filterClients(query) {
+            const lowerQuery = query.toLowerCase();
+            clients = allClients.filter(c => {
+                const nameParts = c.name.split(' ');
+                const firstName = nameParts[0].toLowerCase();
+                const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1].toLowerCase() : '';
+                return firstName.startsWith(lowerQuery) || lastName.startsWith(lowerQuery);
+            });
+            renderClientsList();
+        }
         
         function renderClientsList() {
             const container = document.getElementById('clients-list');
