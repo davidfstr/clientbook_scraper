@@ -313,7 +313,7 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         self.wfile.write(html.encode('utf-8'))
     
     def serve_clients_list(self):
-        """Return JSON list of all clients"""
+        """Return JSON list of all clients with messages"""
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -324,6 +324,7 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             LEFT JOIN conversations cv ON c.client_id = cv.client_id
             LEFT JOIN messages m ON cv.conversation_id = m.conversation_id
             GROUP BY c.client_id
+            HAVING COUNT(m.message_id) > 0
             ORDER BY MIN(m.message_id) ASC
         """).fetchall()
         
