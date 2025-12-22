@@ -6,6 +6,8 @@ Clientbook scraper - extracts conversation data from Clientbook dashboard
 import asyncio
 import sqlite3
 import argparse
+import subprocess
+import os
 from pathlib import Path
 from playwright.async_api import async_playwright, Page
 from datetime import datetime
@@ -625,6 +627,17 @@ async def main():
     
     # Initialize database
     init_database()
+    
+    # Start caffeinate to keep computer awake during scraping (macOS only)
+    caffeinate_process = None
+    try:
+        pid = os.getpid()
+        caffeinate_process = subprocess.Popen(['caffeinate', '-disu', '-w', str(pid)],
+                                              stdout=subprocess.DEVNULL,
+                                              stderr=subprocess.DEVNULL)
+    except (FileNotFoundError, OSError):
+        # Not on macOS or caffeinate not available, silently continue
+        pass
     
     async with async_playwright() as p:
         # Launch browser in headed mode so we can see what's happening
