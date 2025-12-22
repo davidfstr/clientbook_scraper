@@ -168,8 +168,4 @@ python scraper.py --num-conversations 25
 ```
 
 **Next Steps:**
-- Get a conversation to scrape/view perfectly (in terms of information content):
-    - Scroll through long conversations in scraper to get all messages (may be paginated)
-    - Download images. Don't just record image URLs.
-- Add search (by client name) functionality to viewer
-- Style viewer to look more like Clientbook UI (message bubbles, colors, layout)
+- All done!
