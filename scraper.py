@@ -609,6 +609,8 @@ async def main():
                        help='Number of conversations to scrape (default: 50)')
     parser.add_argument('--verbose', action='store_true',
                        help='Show detailed output for each conversation (default: use progress bar)')
+    parser.add_argument('--start-at', type=int, default=None,
+                       help='Start scraping at this conversation index (0-based, for resuming after errors)')
     args = parser.parse_args()
     
     print("=" * 60)
@@ -617,6 +619,8 @@ async def main():
     if args.minimal_messages:
         print("⚡ MINIMAL MODE: Fetching only 1 message per conversation")
     print(f"Target: {args.num_conversations} conversations")
+    if args.start_at is not None:
+        print(f"Starting at index: {args.start_at}")
     print("=" * 60)
     
     # Initialize database
@@ -661,6 +665,10 @@ async def main():
                 conversation_indexes = tqdm(conversation_indexes, desc="Scraping conversations", unit="conversation")
             
             for i in conversation_indexes:
+                # Skip conversations before start index if specified
+                if args.start_at is not None and i < args.start_at:
+                    continue
+                
                 # If using search-based approach, search for this conversation first
                 if use_search:
                     client_name = conversations[i]['name']
