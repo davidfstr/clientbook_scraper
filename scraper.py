@@ -239,6 +239,34 @@ async def get_inbox_list(page: Page, target_count: int = 50) -> list:
     return conversations
 
 
+async def search_conversation(page: Page, client_name: str) -> int:
+    """Search for a conversation by client name and return number of matches"""
+    # Find the search input box using its ID
+    search_input = await page.query_selector('#inbox-search')
+    
+    if search_input:
+        # Clear any existing search
+        await search_input.click()
+        await search_input.fill('')
+        
+        # Enter the client name
+        await search_input.fill(client_name)
+        
+        # Wait a moment for the list to filter
+        await asyncio.sleep(1)
+        
+        # Count how many conversations match
+        match_count = await page.evaluate("""
+            () => {
+                return document.querySelectorAll('li[id*="chatList"]').length;
+            }
+        """)
+        
+        return match_count
+    
+    return 0
+
+
 async def scrape_conversation(page: Page, conversation_index: int, minimal_messages: bool = False, verbose: bool = True) -> dict:
     """Click on a conversation and extract all messages"""
     if verbose:
@@ -480,6 +508,97 @@ async def scrape_conversation(page: Page, conversation_index: int, minimal_messa
     return data
 
 
+async def save_conversation_to_db(c, data, conn) -> None:
+    # Save client
+    c.execute("""
+        INSERT OR REPLACE INTO clients (client_id, name, first_seen_at, last_updated_at)
+        VALUES (?, ?, ?, ?)
+    """, (
+        data['clientId'],
+        data['clientName'],
+        datetime.now().isoformat(),
+        datetime.now().isoformat()
+    ))
+    
+    # Save conversation
+    c.execute("""
+        INSERT OR IGNORE INTO conversations (client_id)
+        VALUES (?)
+    """, (data['clientId'],))
+    
+    conversation_id = c.execute(
+        "SELECT conversation_id FROM conversations WHERE client_id = ?",
+        (data['clientId'],)
+    ).fetchone()[0]
+    
+    # Save messages
+    for msg in data.get('messages', []):
+        msg_type = msg.get('type', 'text')
+        is_right = msg.get('isRightAligned', False)
+        sender_name = msg.get('senderName', '')
+        
+        # Determine sender type
+        if is_right:
+            sender_type = 'associate'  # Account holder (Laura)
+        elif sender_name:
+            # Check if it's the client or another associate
+            if sender_name == data.get('clientName', ''):
+                sender_type = 'client'
+            else:
+                sender_type = 'other_associate'
+        else:
+            sender_type = 'unknown'
+        
+        if msg_type == 'text':
+            # Insert text message
+            c.execute("""
+                INSERT INTO messages (
+                    conversation_id, sender_type, sender_name, 
+                    message_text, message_date, message_time, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                conversation_id,
+                sender_type,
+                sender_name,
+                msg.get('text', ''),
+                msg.get('date', ''),
+                msg.get('time', ''),
+                datetime.now().isoformat()
+            ))
+        
+        elif msg_type == 'image':
+            # Create a placeholder message for the image
+            c.execute("""
+                INSERT INTO messages (
+                    conversation_id, sender_type, sender_name, 
+                    message_text, message_date, message_time, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                conversation_id,
+                sender_type,
+                sender_name,
+                '[Image]',  # Placeholder text
+                msg.get('date', ''),
+                msg.get('time', ''),
+                datetime.now().isoformat()
+            ))
+            
+            # Get the message_id we just inserted
+            message_id = c.lastrowid
+            
+            # Insert the image record
+            c.execute("""
+                INSERT INTO images (message_id, image_url, image_time)
+                VALUES (?, ?, ?)
+            """, (
+                message_id,
+                msg.get('imageUrl', ''),
+                msg.get('time', '')
+            ))
+    
+    conn.commit()
+
+
 async def main():
     """Main scraper entry point"""
     # Parse command line arguments
@@ -531,120 +650,72 @@ async def main():
             skipped_count = 0
             scraped_count = 0
             
+            # Determine if we should use search-based approach for better performance
+            use_search = len(conversations) > 500
+            if use_search and args.verbose:
+                print(f"\n⚡ Using search-based approach for better performance ({len(conversations)} conversations)")
+            
             # Use tqdm progress bar if not in verbose mode
             conversation_indexes = range(num_to_scrape)
             if not args.verbose:
                 conversation_indexes = tqdm(conversation_indexes, desc="Scraping conversations", unit="conversation")
             
             for i in conversation_indexes:
-                # First, scrape the conversation to get the client ID
-                # (we need minimal info to check if client exists)
-                data = await scrape_conversation(page, i, minimal_messages=args.minimal_messages, verbose=args.verbose)
+                # If using search-based approach, search for this conversation first
+                if use_search:
+                    client_name = conversations[i]['name']
+                    match_count = await search_conversation(page, client_name)
+                    
+                    if match_count == 0:
+                        if args.verbose:
+                            print(f"  ⚠️  No matches found for '{client_name}'")
+                        continue
+                    
+                    # Usually exactly 1 match, but could be more
+                    # Scrape all matches (typically just index 0)
+                    for match_idx in range(match_count):
+                        data = await scrape_conversation(page, match_idx, minimal_messages=args.minimal_messages, verbose=args.verbose)
+                        
+                        # Check if this client already exists in the database
+                        existing_client = c.execute(
+                            "SELECT client_id FROM clients WHERE client_id = ?",
+                            (data['clientId'],)
+                        ).fetchone()
+                        
+                        if existing_client:
+                            if args.verbose:
+                                print(f"  ⏭️  Skipping - client already exists in database")
+                            skipped_count += 1
+                            continue
+                        
+                        # Process this conversation (save to database)
+                        scraped_count += 1
+                        await save_conversation_to_db(c, data, conn)
+                        
+                        if args.verbose:
+                            print(f"  ✓ Saved to database")
+                else:
+                    # Direct index-based approach for smaller lists
+                    data = await scrape_conversation(page, i, minimal_messages=args.minimal_messages, verbose=args.verbose)
                 
-                # Check if this client already exists in the database
-                existing_client = c.execute(
-                    "SELECT client_id FROM clients WHERE client_id = ?",
-                    (data['clientId'],)
-                ).fetchone()
-                
-                if existing_client:
+                    # Check if this client already exists in the database (non-search mode)
+                    existing_client = c.execute(
+                        "SELECT client_id FROM clients WHERE client_id = ?",
+                        (data['clientId'],)
+                    ).fetchone()
+                    
+                    if existing_client:
+                        if args.verbose:
+                            print(f"  ⏭️  Skipping - client already exists in database")
+                        skipped_count += 1
+                        continue
+                    
+                    # Process this conversation (save to database)
+                    scraped_count += 1
+                    await save_conversation_to_db(c, data, conn)
+                    
                     if args.verbose:
-                        print(f"  ⏭️  Skipping - client already exists in database")
-                    skipped_count += 1
-                    continue
-                
-                scraped_count += 1
-                
-                # Save client
-                c.execute("""
-                    INSERT OR REPLACE INTO clients (client_id, name, first_seen_at, last_updated_at)
-                    VALUES (?, ?, ?, ?)
-                """, (
-                    data['clientId'],
-                    data['clientName'],
-                    datetime.now().isoformat(),
-                    datetime.now().isoformat()
-                ))
-                
-                # Save conversation
-                c.execute("""
-                    INSERT OR IGNORE INTO conversations (client_id)
-                    VALUES (?)
-                """, (data['clientId'],))
-                
-                conversation_id = c.execute(
-                    "SELECT conversation_id FROM conversations WHERE client_id = ?",
-                    (data['clientId'],)
-                ).fetchone()[0]
-                
-                # Save messages
-                for msg in data.get('messages', []):
-                    msg_type = msg.get('type', 'text')
-                    is_right = msg.get('isRightAligned', False)
-                    sender_name = msg.get('senderName', '')
-                    
-                    # Determine sender type
-                    if is_right:
-                        sender_type = 'associate'  # Account holder (Laura)
-                    elif sender_name:
-                        # Check if it's the client or another associate
-                        if sender_name == data.get('clientName', ''):
-                            sender_type = 'client'
-                        else:
-                            sender_type = 'other_associate'
-                    else:
-                        sender_type = 'unknown'
-                    
-                    if msg_type == 'text':
-                        # Insert text message
-                        c.execute("""
-                            INSERT INTO messages (
-                                conversation_id, sender_type, sender_name, 
-                                message_text, message_date, message_time, timestamp
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            conversation_id,
-                            sender_type,
-                            sender_name,
-                            msg.get('text', ''),
-                            msg.get('date', ''),
-                            msg.get('time', ''),
-                            datetime.now().isoformat()
-                        ))
-                    
-                    elif msg_type == 'image':
-                        # Create a placeholder message for the image
-                        c.execute("""
-                            INSERT INTO messages (
-                                conversation_id, sender_type, sender_name, 
-                                message_text, message_date, message_time, timestamp
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            conversation_id,
-                            sender_type,
-                            sender_name,
-                            '[Image]',  # Placeholder text
-                            msg.get('date', ''),
-                            msg.get('time', ''),
-                            datetime.now().isoformat()
-                        ))
-                        
-                        # Get the message_id we just inserted
-                        message_id = c.lastrowid
-                        
-                        # Insert the image record
-                        c.execute("""
-                            INSERT INTO images (message_id, image_url, image_time)
-                            VALUES (?, ?, ?)
-                        """, (
-                            message_id,
-                            msg.get('imageUrl', ''),
-                            msg.get('time', '')
-                        ))
-                
-                conn.commit()
-                if args.verbose:
-                    print(f"  ✓ Saved to database")
+                        print(f"  ✓ Saved to database")
             
             conn.close()
             
