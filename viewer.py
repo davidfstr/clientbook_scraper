@@ -57,7 +57,8 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             width: 320px;
             background: white;
             border-right: 1px solid #ddd;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
         .main {
             flex: 1;
@@ -87,6 +88,10 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         }
         .search-input::placeholder {
             color: #999;
+        }
+        .clients-list-container {
+            flex: 1;
+            overflow-y: auto;
         }
         .client-item {
             padding: 15px 20px;
@@ -179,7 +184,9 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             <div class="search-box">
                 <input type="text" id="search-input" class="search-input" placeholder="Search by first or last name...">
             </div>
-            <div id="clients-list" class="loading">Loading...</div>
+            <div class="clients-list-container">
+                <div id="clients-list" class="loading">Loading...</div>
+            </div>
         </div>
         <div class="main">
             <div id="conversation" class="empty-state">
