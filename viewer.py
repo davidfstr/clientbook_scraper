@@ -158,6 +158,7 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             max-width: 300px;
             border-radius: 8px;
             display: block;
+            cursor: pointer;
         }
         .empty-state {
             text-align: center;
@@ -282,7 +283,9 @@ class ClientbookHandler(BaseHTTPRequestHandler):
                 if (m.image_url) {
                     // Use local image if downloaded, otherwise fallback to remote URL
                     const imageUrl = m.local_filename ? `/images/${m.local_filename}` : m.image_url;
+                    html += `<a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer">`;
                     html += `<img src="${escapeHtml(imageUrl)}" class="message-image" alt="Message attachment">`;
+                    html += `</a>`;
                 }
                 
                 // Show message time
