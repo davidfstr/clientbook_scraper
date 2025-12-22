@@ -247,7 +247,7 @@ async def scrape_conversation(page: Page, conversation_index: int, minimal_messa
     await page.locator(f'li[id^="chatList"]').nth(conversation_index).click()
     
     # Wait less time if we're doing minimal scraping
-    wait_time = 1 if minimal_messages else 3
+    wait_time = 1 if minimal_messages else 2
     await asyncio.sleep(wait_time)  # Wait for messages to load
     
     # Prepare JavaScript code with minimal mode flag
