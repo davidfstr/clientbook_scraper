@@ -9,6 +9,7 @@ import argparse
 from pathlib import Path
 from playwright.async_api import async_playwright, Page
 from datetime import datetime
+from tqdm import tqdm
 
 
 # Database setup
@@ -238,9 +239,10 @@ async def get_inbox_list(page: Page, target_count: int = 50) -> list:
     return conversations
 
 
-async def scrape_conversation(page: Page, conversation_index: int, minimal_messages: bool = False) -> dict:
+async def scrape_conversation(page: Page, conversation_index: int, minimal_messages: bool = False, verbose: bool = True) -> dict:
     """Click on a conversation and extract all messages"""
-    print(f"\nScraping conversation {conversation_index + 1}...")
+    if verbose:
+        print(f"\nScraping conversation {conversation_index + 1}...")
     
     # Click on the conversation
     await page.locator(f'li[id^="chatList"]').nth(conversation_index).click()
@@ -469,12 +471,12 @@ async def scrape_conversation(page: Page, conversation_index: int, minimal_messa
     # Execute the JavaScript with the minimal mode parameter
     data = await page.evaluate(js_code, minimal_messages)
     
-    print(f"  Client: {data.get('clientName', 'Unknown')} (ID: {data.get('clientId', 'Unknown')})")
-    print(f"  Messages found: {len(data.get('messages', []))}")
-    if data.get('messages'):
-        first_msg_text = data['messages'][0].get('text', data['messages'][0].get('imageUrl', ''))
-        print(f"  First message: {str(first_msg_text)[:80]}...")
-    return data
+    if verbose:
+        print(f"  Client: {data.get('clientName', 'Unknown')} (ID: {data.get('clientId', 'Unknown')})")
+        print(f"  Messages found: {len(data.get('messages', []))}")
+        if data.get('messages'):
+            first_msg_text = data['messages'][0].get('text', data['messages'][0].get('imageUrl', ''))
+            print(f"  First message: {str(first_msg_text)[:80]}...")
     return data
 
 
@@ -486,6 +488,8 @@ async def main():
                        help='Fetch only 1 message per conversation for faster name extraction')
     parser.add_argument('--num-conversations', type=int, default=50,
                        help='Number of conversations to scrape (default: 50)')
+    parser.add_argument('--verbose', action='store_true',
+                       help='Show detailed output for each conversation (default: use progress bar)')
     args = parser.parse_args()
     
     print("=" * 60)
@@ -524,8 +528,32 @@ async def main():
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             
-            for i in range(num_to_scrape):
-                data = await scrape_conversation(page, i, minimal_messages=args.minimal_messages)
+            skipped_count = 0
+            scraped_count = 0
+            
+            # Use tqdm progress bar if not in verbose mode
+            conversation_indexes = range(num_to_scrape)
+            if not args.verbose:
+                conversation_indexes = tqdm(conversation_indexes, desc="Scraping conversations", unit="conversation")
+            
+            for i in conversation_indexes:
+                # First, scrape the conversation to get the client ID
+                # (we need minimal info to check if client exists)
+                data = await scrape_conversation(page, i, minimal_messages=args.minimal_messages, verbose=args.verbose)
+                
+                # Check if this client already exists in the database
+                existing_client = c.execute(
+                    "SELECT client_id FROM clients WHERE client_id = ?",
+                    (data['clientId'],)
+                ).fetchone()
+                
+                if existing_client:
+                    if args.verbose:
+                        print(f"  ⏭️  Skipping - client already exists in database")
+                    skipped_count += 1
+                    continue
+                
+                scraped_count += 1
                 
                 # Save client
                 c.execute("""
@@ -615,14 +643,17 @@ async def main():
                         ))
                 
                 conn.commit()
-                print(f"  ✓ Saved to database")
+                if args.verbose:
+                    print(f"  ✓ Saved to database")
             
             conn.close()
             
             print("\n" + "="*60)
             print("✓ SCRAPING COMPLETE!")
             print("="*60)
-            print(f"Scraped {num_to_scrape} conversations")
+            print(f"Total conversations processed: {num_to_scrape}")
+            print(f"  New conversations scraped: {scraped_count}")
+            print(f"  Existing conversations skipped: {skipped_count}")
             print(f"Database: {DB_PATH}")
             print(f"\nNext: Build a web viewer to browse the data")
             
