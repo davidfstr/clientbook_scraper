@@ -146,9 +146,8 @@ async def get_inbox_list(page: Page, target_count: int = 50) -> list:
     # Scroll the conversation list to load more conversations
     prev_count = 0
     attempts = 0
-    max_attempts = 20  # Prevent infinite loops
     
-    while attempts < max_attempts:
+    while True:
         # Count current conversations
         current_count = await page.evaluate("""
             () => {
