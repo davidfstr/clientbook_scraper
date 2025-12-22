@@ -7,10 +7,12 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import sqlite3
 import json
 import urllib.parse
+import mimetypes
 from pathlib import Path
 
 
 DB_PATH = Path(__file__).parent / "clientbook.db"
+IMAGES_DIR = Path(__file__).parent / "clientbook.db-images"
 PORT = 8080
 
 
@@ -27,6 +29,9 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         elif path == '/api/conversation':
             client_id = query.get('client_id', [None])[0]
             self.serve_conversation(client_id)
+        elif path.startswith('/images/'):
+            filename = path[8:]  # Remove '/images/' prefix
+            self.serve_image(filename)
         else:
             self.send_error(404)
     
@@ -275,7 +280,9 @@ class ClientbookHandler(BaseHTTPRequestHandler):
                 
                 // Show image if present
                 if (m.image_url) {
-                    html += `<img src="${escapeHtml(m.image_url)}" class="message-image" alt="Message attachment">`;
+                    // Use local image if downloaded, otherwise fallback to remote URL
+                    const imageUrl = m.local_filename ? `/images/${m.local_filename}` : m.image_url;
+                    html += `<img src="${escapeHtml(imageUrl)}" class="message-image" alt="Message attachment">`;
                 }
                 
                 // Show message time
@@ -362,9 +369,10 @@ class ClientbookHandler(BaseHTTPRequestHandler):
             rows = c.execute("""
                 SELECT m.message_text, m.message_date, m.message_time, m.message_id,
                        m.sender_type, m.sender_name,
-                       i.image_url, i.image_id
+                       i.image_url, i.image_id, d.filename as local_filename
                 FROM messages m
                 LEFT JOIN images i ON m.message_id = i.message_id
+                LEFT JOIN image_downloads d ON i.image_url = d.url
                 WHERE m.conversation_id = ?
                 ORDER BY m.message_id DESC
             """, (conversation['conversation_id'],)).fetchall()
@@ -382,6 +390,35 @@ class ClientbookHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps(result).encode('utf-8'))
+    
+    def serve_image(self, filename):
+        """Serve an image from the local images directory"""
+        # Sanitize filename to prevent directory traversal
+        filename = Path(filename).name
+        
+        image_path = IMAGES_DIR / filename
+        
+        if not image_path.exists() or not image_path.is_file():
+            self.send_error(404, "Image not found")
+            return
+        
+        # Determine content type
+        content_type, _ = mimetypes.guess_type(str(image_path))
+        if not content_type:
+            content_type = 'application/octet-stream'
+        
+        try:
+            with open(image_path, 'rb') as f:
+                content = f.read()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Content-Length', str(len(content)))
+            self.send_header('Cache-Control', 'public, max-age=31536000')  # Cache for 1 year
+            self.end_headers()
+            self.wfile.write(content)
+        except Exception as e:
+            self.send_error(500, f"Error reading image: {e}")
     
     def log_message(self, format, *args):
         """Suppress default logging"""

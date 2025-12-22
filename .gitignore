@@ -3,3 +3,7 @@
 
 # Clientbook database
 *.db
+*.db-images
+
+# macOS
+.DS_Store
