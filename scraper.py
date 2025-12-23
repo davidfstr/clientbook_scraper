@@ -269,10 +269,20 @@ async def search_conversation(page: Page, client_name: str) -> int:
     return 0
 
 
-async def scrape_conversation(page: Page, conversation_index: int, minimal_messages: bool = False, verbose: bool = True) -> dict:
+async def scrape_conversation(
+        page: Page,
+        conversation_index: int,
+        minimal_messages: bool = False,
+        verbose: bool = True,
+        prefix_index: int | None = None
+        ) -> dict:
     """Click on a conversation and extract all messages"""
     if verbose:
-        print(f"\nScraping conversation {conversation_index + 1}...")
+        prefix_part = (
+            '' if prefix_index is None
+            else f'{prefix_index + 1}.'
+        )
+        print(f"\nScraping conversation {prefix_part}{conversation_index + 1}...")
     
     # Click on the conversation
     await page.locator(f'li[id^="chatList"]').nth(conversation_index).click()
@@ -691,7 +701,13 @@ async def main():
                     # Usually exactly 1 match, but could be more
                     # Scrape all matches (typically just index 0)
                     for match_idx in range(match_count):
-                        data = await scrape_conversation(page, match_idx, minimal_messages=args.minimal_messages, verbose=args.verbose)
+                        data = await scrape_conversation(
+                            page,
+                            match_idx,
+                            minimal_messages=args.minimal_messages,
+                            verbose=args.verbose,
+                            prefix_index=i,
+                        )
                         
                         # Check if this client already exists in the database
                         existing_client = c.execute(
@@ -737,7 +753,12 @@ async def main():
                             print(f"  ✓ Saved to database")
                 else:
                     # Direct index-based approach for smaller lists
-                    data = await scrape_conversation(page, i, minimal_messages=args.minimal_messages, verbose=args.verbose)
+                    data = await scrape_conversation(
+                        page,
+                        i,
+                        minimal_messages=args.minimal_messages,
+                        verbose=args.verbose,
+                    )
                 
                     # Check if this client already exists in the database (non-search mode)
                     existing_client = c.execute(
