@@ -310,20 +310,8 @@ async def scrape_conversation(page: Page, conversation_index: int, minimal_messa
             
             // Find the message container more precisely
             // It's typically a scrollable div that contains the messages
-            const allDivs = document.querySelectorAll('div');
-            let messageContainer = null;
-            
-            // Look for a div that contains date headers like "December 06, 2025"
-            for (const div of allDivs) {
-                const text = div.textContent;
-                if (text.match(/\\w+ \\d{2}, \\d{4}/) && 
-                    !text.includes('Inbox') && 
-                    !text.includes('Today') &&
-                    div.children.length > 5) {  // Has multiple message elements
-                    messageContainer = div;
-                    break;
-                }
-            }
+            const infScrollDivs = document.querySelectorAll('.infinite-scroll-component');
+            let messageContainer = infScrollDivs[1];
             
             if (messageContainer) {
                 // Parse messages from the container
@@ -490,7 +478,7 @@ async def scrape_conversation(page: Page, conversation_index: int, minimal_messa
             } else {
                 result.debug = {
                     containerFound: false,
-                    divsChecked: allDivs.length
+                    divsChecked: infScrollDivs.length
                 };
             }
             
