@@ -692,6 +692,30 @@ async def main():
                         ).fetchone()
                         
                         if existing_client:
+                            # Check if the existing conversation has 0 messages
+                            conversation_id = c.execute(
+                                "SELECT conversation_id FROM conversations WHERE client_id = ?",
+                                (data['clientId'],)
+                            ).fetchone()
+                            
+                            if conversation_id:
+                                message_count = c.execute(
+                                    "SELECT COUNT(*) FROM messages WHERE conversation_id = ?",
+                                    (conversation_id[0],)
+                                ).fetchone()[0]
+                                
+                                if message_count == 0 and len(data.get('messages', [])) > 0:
+                                    if args.verbose:
+                                        print(f"  🔄 Rescraping - previous scrape captured 0 messages, found {len(data.get('messages', []))} messages")
+                                    # Delete the old conversation and re-save
+                                    c.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id[0],))
+                                    conn.commit()
+                                    scraped_count += 1
+                                    await save_conversation_to_db(c, data, conn)
+                                    if args.verbose:
+                                        print(f"  ✓ Saved to database")
+                                    continue
+                            
                             if args.verbose:
                                 print(f"  ⏭️  Skipping - client already exists in database")
                             skipped_count += 1
@@ -714,6 +738,30 @@ async def main():
                     ).fetchone()
                     
                     if existing_client:
+                        # Check if the existing conversation has 0 messages
+                        conversation_id = c.execute(
+                            "SELECT conversation_id FROM conversations WHERE client_id = ?",
+                            (data['clientId'],)
+                        ).fetchone()
+                        
+                        if conversation_id:
+                            message_count = c.execute(
+                                "SELECT COUNT(*) FROM messages WHERE conversation_id = ?",
+                                (conversation_id[0],)
+                            ).fetchone()[0]
+                            
+                            if message_count == 0 and len(data.get('messages', [])) > 0:
+                                if args.verbose:
+                                    print(f"  🔄 Rescraping - previous scrape captured 0 messages, found {len(data.get('messages', []))} messages")
+                                # Delete the old conversation and re-save
+                                c.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id[0],))
+                                conn.commit()
+                                scraped_count += 1
+                                await save_conversation_to_db(c, data, conn)
+                                if args.verbose:
+                                    print(f"  ✓ Saved to database")
+                                continue
+                        
                         if args.verbose:
                             print(f"  ⏭️  Skipping - client already exists in database")
                         skipped_count += 1
