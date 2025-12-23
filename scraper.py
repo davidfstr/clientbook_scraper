@@ -488,13 +488,21 @@ async def scrape_conversation(page: Page, conversation_index: int, minimal_messa
     
     # Execute the JavaScript with the minimal mode parameter
     data = await page.evaluate(js_code, minimal_messages)
+    client_name = data.get('clientName', 'Unknown')
+    message_count = len(data.get('messages', []))
     
     if verbose:
-        print(f"  Client: {data.get('clientName', 'Unknown')} (ID: {data.get('clientId', 'Unknown')})")
-        print(f"  Messages found: {len(data.get('messages', []))}")
+        print(f"  Client: {client_name} (ID: {data.get('clientId', 'Unknown')})")
+        print(f"  Messages found: {message_count}")
+        if message_count == 0:
+            # NOTE: "Brea Baker" is an example of a client with legitimately
+            #       no conversations, because an error message is displayed:
+            #       "We don't recognize this number"
+            print(f"    ⚠️ No messages found!")
         if data.get('messages'):
             first_msg_text = data['messages'][0].get('text', data['messages'][0].get('imageUrl', ''))
             print(f"  First message: {str(first_msg_text)[:80]}...")
+    
     return data
 
 
