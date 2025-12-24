@@ -1,3 +1,6 @@
+# Python
+*.py[co]
+
 # venv
 /*venv*
 
@@ -7,3 +10,9 @@
 
 # macOS
 .DS_Store
+
+# dist
+/*.spec
+/build
+/dist/Clientbook Viewer
+/dist/Clientbook Viewer.app
