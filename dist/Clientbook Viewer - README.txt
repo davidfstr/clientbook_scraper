@@ -36,7 +36,7 @@ Requirements
 ------------
 
 For the manual Python method, you need Python 3.6 or later installed. 
-Download Python 3 from <https://python.org/>.
+Download Python 3 from https://python.org/ .
 
 
 About
