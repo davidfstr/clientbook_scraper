@@ -1,6 +1,15 @@
 # Clientbook Archive Project
 
-This project scrapes conversation data from Clientbook (a CRM system) and provides a local web interface to browse the archived conversations.
+This project scrapes conversation data from Clientbook (a CRM system) and provides a local web interface to browse the archived conversations. 
+
+The scraper part (`scraper.py`) was written to be run only once in 
+**December 2025** and is likely to stop working after a few months when 
+Clientbook changes its web interface. Nevertheless it may be a useful 
+starting point for someone writing an updated Clientbook scraper in the future.
+
+The viewer part (`viewer.py`) is written to be usable for decades,
+even if the macOS .app bundle it is distributed inside stops working
+when Apple updates macOS over time.
 
 ## Components
 
