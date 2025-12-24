@@ -36,7 +36,7 @@ Requirements
 ------------
 
 For the manual Python method, you need Python 3.6 or later installed. 
-Python 3 comes pre-installed on modern macOS versions.
+Download Python 3 from <https://python.org/>.
 
 
 About
