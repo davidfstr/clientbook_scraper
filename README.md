@@ -127,3 +127,13 @@ For detailed development notes, implementation decisions, and scraper usage exam
     ├── PLAN.md             # Detailed development notes
     └── PLAN-2.md           # .app bundling strategy notes
 ```
+
+## AI Disclosure
+
+Claude Sonnet 3.5 and VS Code Copilot Agent were used to draft the initial
+versions of many of the files in this repository.
+
+The `scrape_conversation` implementation in `scraper.py` uses some fragile
+techniques to navigate HTML and is likely to break when Clientbook
+updates their UI structure. I deemed this acceptable for a script intended
+for a one-time scraping use.
