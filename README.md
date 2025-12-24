@@ -52,7 +52,7 @@ python3 image_downloader.py
 **Option 1: Run the Python script directly**
 ```bash
 python3 viewer.py
-# Then visit http://localhost:8080 in your browser
+# Then visit http://127.0.0.1:8080 in your browser
 ```
 
 **Option 2: Build and use the macOS .app bundle**

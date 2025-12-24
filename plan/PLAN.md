@@ -55,7 +55,7 @@ Save notes you want to remember between sessions to this section:
    - Simple HTTP server (no external dependencies)
    - Left sidebar shows list of clients
    - Right side shows conversation messages grouped by date
-   - Usage: `python3 viewer.py` then open http://localhost:8080
+   - Usage: `python3 viewer.py` then open http://127.0.0.1:8080
 
 **Status:** Basic scraping and viewing is working!
 

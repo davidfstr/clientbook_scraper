@@ -9,7 +9,7 @@ How to Use
 
 1. Double-click "Clientbook Viewer.app" to launch it.
 
-2. A small window will appear with a link to http://localhost:8080/
+2. A small window will appear with a link to http://127.0.0.1:8080/
 
 3. Click the link (or visit it manually in your browser) to view your data.
 
@@ -28,7 +28,7 @@ Example (from the directory with your .app bundle):
   cd 'Clientbook Viewer.app/Contents/Frameworks'
   python3 viewer.py
 
-This will start the same web server. Then visit http://localhost:8080/ 
+This will start the same web server. Then visit http://127.0.0.1:8080/ 
 in your web browser.
 
 

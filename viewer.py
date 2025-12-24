@@ -485,11 +485,11 @@ def main():
     print("CLIENTBOOK VIEWER")
     print("=" * 60)
     print(f"Database: {DB_PATH}")
-    print(f"Starting server at http://localhost:{PORT}")
+    print(f"Starting server at http://127.0.0.1:{PORT}")
     print("Press Ctrl+C to stop")
     print("=" * 60)
     
-    server = HTTPServer(('localhost', PORT), ClientbookHandler)
+    server = HTTPServer(('127.0.0.1', PORT), ClientbookHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

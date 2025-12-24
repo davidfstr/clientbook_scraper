@@ -55,8 +55,8 @@ def start_viewer_server():
         print(f"IMAGES_DIR exists: {viewer.IMAGES_DIR.exists()}", flush=True)
         
         print(f"Starting HTTP server on port {viewer.PORT}...", flush=True)
-        server = HTTPServer(('localhost', viewer.PORT), viewer.ClientbookHandler)
-        print(f"Server started on http://localhost:{viewer.PORT}/", flush=True)
+        server = HTTPServer(('127.0.0.1', viewer.PORT), viewer.ClientbookHandler)
+        print(f"Server started on http://127.0.0.1:{viewer.PORT}/", flush=True)
         server.serve_forever()
     except Exception as e:
         print(f"ERROR in start_viewer_server: {e}", flush=True)
@@ -101,7 +101,7 @@ class ClientbookViewerApp:
         instructions.pack()
         
         # URL link
-        url = f"http://localhost:{self.get_port()}/"
+        url = f"http://127.0.0.1:{self.get_port()}/"
         link = tk.Label(
             main_frame,
             text=url,
