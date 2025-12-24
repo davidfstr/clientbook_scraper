@@ -2,22 +2,18 @@ Clientbook Viewer
 =================
 
 This application provides a simple web interface to browse your archived 
-Clientbook conversations stored in "clientbook.db" and "clientbook.db-images".
+Clientbook conversations.
 
 How to Use
 ----------
 
-1. Place the "Clientbook Viewer.app" in the same directory as your:
-   - clientbook.db (the database file)
-   - clientbook.db-images/ (the images directory)
+1. Double-click "Clientbook Viewer.app" to launch it.
 
-2. Double-click "Clientbook Viewer.app" to launch it.
+2. A small window will appear with a link to http://localhost:8080/
 
-3. A small window will appear with a link to http://localhost:8080/
+3. Click the link (or visit it manually in your browser) to view your data.
 
-4. Click the link (or visit it manually in your browser) to view your data.
-
-5. Close the window when you're done to stop the server.
+4. Close the window when you're done to stop the server.
 
 
 Troubleshooting
@@ -25,10 +21,7 @@ Troubleshooting
 
 If the .app bundle stops working after macOS updates (this can happen 
 with frozen Python applications), you can run the viewer directly with 
-Python.
-
-IMPORTANT: You must run viewer.py from the Frameworks directory inside 
-the .app bundle, where the database symlinks are located.
+Python from the Frameworks directory inside the .app bundle.
 
 Example (from the directory with your .app bundle):
 
